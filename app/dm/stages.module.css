@@ -1,0 +1,41 @@
+/* ================= Numbered workflow stages ================= */
+.stage{border:1px solid #283346;background:#111925;border-radius:13px;padding:20px;margin-bottom:20px}
+.stageHead{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.stageNum{flex-shrink:0;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#091322;background:#719df5;box-shadow:0 3px 14px #719df533}
+.stageText{flex:1 1 260px;min-width:0}
+.stageTitle{font-size:15px;font-weight:650;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
+.stageNote{font-size:11px;color:#7d8da6;line-height:1.75;margin-top:6px;max-width:860px}
+.stageActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.stageFoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:15px;padding-top:15px;border-top:1px solid #263144}
+.stageHint{font-size:10px;color:#69809f;line-height:1.7}
+.stageBody{margin-top:16px}
+.stage .panel{border-color:#2b3a52}
+.stage .metrics{margin-bottom:0}
+.stage .inbox{border:1px solid #2b3a52;background:#0f1723}
+.stage .activity{margin-top:16px}
+.stage .footer{margin-top:0}
+
+/* ---- connected-account grid ---- */
+.accountGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:10px;margin-top:16px}
+.accountCard{position:relative;display:flex;align-items:center;gap:12px;border:1px solid #2c3b53;background:#0a121f;border-radius:11px;padding:12px 13px;cursor:pointer;text-align:left;color:inherit;font:inherit;transition:border-color .15s,background .15s}
+.accountCard:hover{border-color:#3f5680;background:#101c2e}
+.accountCardActive{border-color:#719df5;background:#16273f;box-shadow:0 0 0 3px #719df512}
+.accountAvatar{width:36px;height:36px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;background:linear-gradient(145deg,#2b3c56,#1b2538);color:#9bb5dd;font-size:11px;font-weight:700}
+.accountInfo{min-width:0;flex:1;display:grid;gap:3px}
+.accountInfo strong{font-size:12px;color:#d3e0f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accountMeta{font-size:9px;color:#627590;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accountState{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:6px;padding:4px 7px;border:1px solid #2c3b53;color:#8396b2;white-space:nowrap}
+.accountState.stateRunning{color:#68d8aa;border-color:#2c5a49;background:#102a23}
+.accountState.stateRestricted{color:#e8bf77;border-color:#5e4a26;background:#2b2312}
+.accountState.stateError{color:#ef8998;border-color:#5e2c37;background:#2a151c}
+.accountState.stateReady{color:#9bb5dd;border-color:#33445e;background:#152033}
+.accountRemove{flex-shrink:0;width:23px;height:23px;border-radius:7px;display:grid;place-items:center;color:#64789a;background:transparent;border:0;cursor:pointer;padding:0}
+.accountRemove:hover{color:#ef8998;background:#2a151c}
+.accountNotice{margin-top:12px;font-size:10px;color:#c4a6a6;line-height:1.7;overflow-wrap:anywhere}
+
+/* ---- compose + run stage ---- */
+.composeGrid{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:16px;align-items:start;margin-top:16px}
+.composeGrid .panel{margin:0}
+
+@media(max-width:980px){.composeGrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:800px){.stage{padding:16px}.stageActions{margin-left:0;width:100%}.accountGrid{grid-template-columns:minmax(0,1fr)}}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Cloudflare Tunnel :: repostops.xyz -> localhost:3000
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+# TUNNEL_TOKEN lives here, chmod 600. cloudflared reads it from the env.
+EnvironmentFile=/etc/cloudflared/token.env
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=append:/var/log/xpanel/cloudflared.log
+StandardError=append:/var/log/xpanel/cloudflared.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+[Unit]
+Description=X-Panel :: DM automation worker (cookie backend, headless)
+Documentation=https://github.com/CodesFromAnkit/x-panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xpanel
+Group=xpanel
+WorkingDirectory=/opt/xpanel
+Environment=NODE_ENV=production
+# Node 22 needs the flag to strip TypeScript types on the fly (the worker
+# imports lib/dm-worker.ts directly).
+ExecStart=/usr/bin/node --experimental-strip-types /opt/xpanel/scripts/dm-worker.mjs
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/xpanel/dm-worker.log
+StandardError=append:/var/log/xpanel/dm-worker.log
+
+[Install]
+WantedBy=multi-user.target

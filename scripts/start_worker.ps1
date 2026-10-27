@@ -1,0 +1,1 @@
+Start-Process -FilePath "C:\Users\ankit\AppData\Local\Programs\Python\Python311\python.exe" -ArgumentList "worker.py" -WorkingDirectory "C:\Users\ankit\x_panel\worker" -WindowStyle Hidden -RedirectStandardOutput "C:\Users\ankit\x_panel\worker\tmp\worker.log" -RedirectStandardError "C:\Users\ankit\x_panel\worker\tmp\worker.err"

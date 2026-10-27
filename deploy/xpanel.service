@@ -1,0 +1,24 @@
+[Unit]
+Description=X-Panel :: repostops.xyz (Next.js panel, port 3000)
+Documentation=https://github.com/CodesFromAnkit/x-panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xpanel
+Group=xpanel
+WorkingDirectory=/opt/xpanel
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+# Next.js needs a real /tmp for image optimisation
+PrivateTmp=false
+StandardOutput=append:/var/log/xpanel/panel.log
+StandardError=append:/var/log/xpanel/panel.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+.env
+.env.local
+.env*.local
+.vercel
+node_modules
+.next
+public/uploads
+worker/creds
+worker/tmp
+worker/.auth_live_token
+worker/.worker_live_token
+worker/.live_token
+*.db
+*.log
+.git
+.agents
+skills-lock.json

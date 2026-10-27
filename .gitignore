@@ -1,0 +1,69 @@
+node_modules
+.next
+out
+tsconfig.tsbuildinfo
+xpanel.db
+xpanel.db-shm
+xpanel.db-wal
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+public/uploads
+worker/creds
+worker/tmp
+*.log
+.DS_Store
+shot_*.png
+.test_state.json
+
+.vercel
+.env*
+.agents/
+skills-lock.json
+worker/.auth_live_token
+worker/.worker_live_token
+worker/.live_token
+
+# Local Netlify folder
+.netlify
+
+# temp/junk (untracked)
+worker-log.txt
+worker-fresh.log
+*-log.txt
+current-url.txt
+tok.js
+gitpush.js
+setcred.js
+gh.sh
+getcred.ps1
+fixcred.sh
+logs/
+scripts/.diag_token
+
+# xflow local verification artifacts (never commit)
+.tok.tmp
+*.tok
+logs_xflow_phone.png
+.shot_xflow.py
+current-url.txt
+
+# panel service launcher logs (runtime, never commit)
+panel-service.log
+panel-guard.log
+panel-restart.log
+panel-out.log
+panel-out.prev.log
+
+# automation area credential (first login sets it; never commit)
+.automation-auth.json
+tunnel-err.txt
+
+# DM backend local session fallback
+.dm-sessions.json
+backups/
+
+# Local-only: mints an admin panel session for UI verification
+scripts/mint-session.mjs
