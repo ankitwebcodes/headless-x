@@ -126,3 +126,29 @@ What changed in Part 2:
   rejected repost blocks the reply, unavailable post blocks the
   reply, ten chats: six sent and four blocked, rejected repost never
   sends on a later pass. Suite: 70/70 pass.
+
+## Part 3 (2026-10-29) — parked run sits idle: "auto-retry" never fires in page mode
+
+Screenshot from jhoy, 2026-10-29: a run on the test panel sits at
+"Restricted (Auto-Retry) (344)", 0 sent, 18 pending, 2 need attention,
+doing nothing. Code 344 is X's daily limit for sending Tweets and
+messages for that account — no code can bypass it, and retrying early
+only hits it again.
+
+The real bug: processDmRun knows how to un-park a needs_attention run
+once its recoverAt deadline passes (about 60 minutes for a first 344,
+then longer backoffs), and runnableDmRuns() hands such runs to the
+cloud worker — but the panel page's own fleet dispatcher only ever
+dispatched runs in running/waiting state. On Vercel there is no
+background worker configured, so in page-driven mode a parked run was
+never dispatched again, even with the page open and even after its
+deadline. "Auto-retry" was a false promise in that mode; only a manual
+"Resume pending" click could move it.
+
+Fix: app/dm/page.tsx fleet tick now also dispatches a needs_attention
+run whose attention.recoverAt deadline has passed (or which has no
+deadline yet, so processDmRun can assign one), while keeping the page
+open. processDmRun still decides whether the deadline is due and
+still parks the account again, with a longer backoff, if X returns
+344 again. This does not bypass the daily cap: the account must wait
+for X's limit to reset, other accounts are unaffected.

@@ -73,7 +73,13 @@ export default function DmPage(){
  // Each started account has its own in-flight batch; switching the visible account never stops dispatch.
  useEffect(()=>{if(!ready)return;let disposed=false,polling=false;
  const tick=async()=>{if(polling)return;polling=true;try{const r=await api("fleet");if(disposed)return;setFleet(r.accounts);setWorkerConfigured(r.workerConfigured);
- for(const a of r.accounts as FleetAccount[]){const current=a.run;if(!current||!["running","waiting"].includes(current.status)||current.nextAt>Date.now()||dispatching.current.has(current.id)||(dispatchRetry.current.get(current.id)??0)>Date.now())continue;
+ for(const a of r.accounts as FleetAccount[]){const current=a.run;
+ // Part 3: a parked (needs_attention) run must also be dispatched once its
+ // auto-retry deadline has passed, otherwise "auto-retry" never happens in
+ // page-driven mode (no background worker on Vercel) and the run sits idle
+ // forever. processDmRun itself decides whether the deadline is due.
+ const parkedReady=current?.status==="needs_attention"&&((current.attention?.recoverAt??0)===0||(current.attention?.recoverAt??0)<=Date.now());
+ if(!current||(!["running","waiting"].includes(current.status)&&!parkedReady)||(current.status!=="needs_attention"&&current.nextAt>Date.now())||dispatching.current.has(current.id)||(dispatchRetry.current.get(current.id)??0)>Date.now())continue;
  dispatching.current.add(current.id);void api("run",{runId:current.id}).then(done=>{if(disposed)return;setFleetErrors(old=>{const next={...old};delete next[a.accountId];return next});if(selectedRef.current===a.accountId)updateRun(done)}).catch(e=>{dispatchRetry.current.set(current.id,Date.now()+5000);if(!disposed&&!/already scanning|cooling down/.test(e.message))setFleetErrors(old=>({...old,[a.accountId]:e.message}))}).finally(()=>dispatching.current.delete(current.id));
  }}catch(e){if(!disposed)fail(e)}finally{polling=false}};void tick();const timer=setInterval(tick,1200);return()=>{disposed=true;clearInterval(timer)}},[ready,updateRun,fail]);
  // Selected-account GET polling stays independent of all account POST batches.
