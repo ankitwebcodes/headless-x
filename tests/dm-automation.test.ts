@@ -339,7 +339,7 @@ test("discovery prioritizes the real main bundle and concurrent lookups share it
     assert.equal(urls.some(u => /vendor|i18n|messages/.test(u)),false);
   } finally { process.env.DM_QID_CREATERETWEET = previous; globalThis.fetch = originalFetch; }
 });
-test("a rejected repost does not block the reply and never falls through to the retired REST route", async () => {
+test("a rejected repost blocks the reply and never falls through to the retired REST route", async () => {
   await setup("no-transport");
   await updateDmDoc<any>("no-transport","scan:account",() => ({}),scan => ({ ...scan,chats: [chat,{ ...chat,id: "111-555" }] }));
   const urls: string[] = [];
@@ -352,15 +352,14 @@ test("a rejected repost does not block the reply and never falls through to the 
   const run = await createDmRun("no-transport",{ id: "account",message: "Hello",concurrency: 1 });
   const result = await processDmRun("no-transport",run.id,16000,1);
   assert.equal(result.status,"waiting");
-  // The post could not be reposted, but the chat is still handled: the reply still goes out.
-  assert.equal(result.items[0].status,"sent");
-  assert.equal(result.items[0].sentId,"reply-after-rejection");
+  // Part 2: the post could not be reposted, so the reply must NOT go out.
+  assert.equal(result.items[0].status,"retry_wait");
+  assert.equal(result.items[0].sentId,undefined);
   assert.deepEqual(result.items[0].reposted,[]);
-  assert.deepEqual(result.items[0].repostSkipped,["123456789"]);
-  assert.match(result.items[0].repostSkipReason ?? "",/repost/i);
+  assert.deepEqual(result.items[0].repostSkipped ?? [],[]);
   assert.equal(result.items[1].status,"queued");
   assert.equal(urls.some(u => u.includes("statuses/retweet")),false);
-  assert.equal(urls.some(u => u.includes("new2.json")),true);
+  assert.equal(urls.some(u => u.includes("new2.json")),false);
   globalThis.fetch = originalFetch;
 });
 test("explicit include-replied policy processes the last incoming post rather than the account's outgoing link", async () => {
@@ -847,7 +846,7 @@ test("same-account refreshes of the same post are serialized, preventing undo/cr
   assert.equal(results.every(r=>r.ok),true);assert.deepEqual(actions,['undo','create','undo','create']);assert.equal(peak,1);globalThis.fetch=originalFetch;
 });
 
-test("an unavailable post never claims a repost, but the reply is still delivered",async()=>{
+test("an unavailable post never claims a repost, and the reply is blocked",async()=>{
   await setup('unavailable-post');const writes:string[]=[];
   globalThis.fetch=(async(url:any,init:any)=>{
     const path=String(url);
@@ -857,14 +856,13 @@ test("an unavailable post never claims a repost, but the reply is still delivere
     return json({conversation_timeline:{entries:[message()],status:'AT_END'}});
   }) as typeof fetch;
   const run=await createDmRun('unavailable-post',{id:'account',message:'Hi'}),result=await processDmRun('unavailable-post',run.id,16000);
-  assert.equal(result.items[0].status,'sent');
-  assert.equal(result.items[0].sentId,'reply-for-deleted-post');
+  assert.equal(result.items[0].status,'failed');
+  assert.equal(result.items[0].sentId,undefined);
   assert.deepEqual(result.items[0].reposted,[]);
-  assert.deepEqual(result.items[0].repostSkipped,['123456789']);
-  assert.match(result.items[0].repostSkipReason??'',/unavailable|repost/i);
-  // No write is wasted trying to repost a post X says does not exist.
+  assert.deepEqual(result.items[0].repostSkipped ?? [],[]);
+  // No write is wasted trying to repost a post X says does not exist, and no reply is sent.
   assert.equal(writes.some(p=>p.includes('CreateRetweet')),false);
-  assert.equal(writes.filter(p=>p.includes('new2.json')).length,1);
+  assert.equal(writes.filter(p=>p.includes('new2.json')).length,0);
   globalThis.fetch=originalFetch;
 });
 
@@ -954,7 +952,7 @@ test("Stop during a read cannot be overwritten by a late deferred checkpoint",as
   globalThis.fetch=originalFetch;
 });
 
-test("ten chats drain independently: four rejected reposts still deliver their replies while six repost and reply",async()=>{
+test("ten chats drain independently: four rejected reposts block their replies while six repost and reply",async()=>{
   const owner='post-rejection-isolation';await setup(owner);const chats=Array.from({length:10},(_,i)=>({...chat,id:`111-${300+i}`}));
   await updateDmDoc<any>(owner,'scan:account',()=>null,s=>({...s,chats}));const sent:string[]=[];const creates:Record<string,number>={};
   globalThis.fetch=withRepostReadback(async(url:any,init:any)=>{
@@ -965,18 +963,17 @@ test("ten chats drain independently: four rejected reposts still deliver their r
   });
   let run=await createDmRun(owner,{id:'account',message:'Done',concurrency:3,speed:2,delayMs:1000});
   run=await processDmRun(owner,run.id,40000,10);
-  // Rejected posts never claim a repost, but they no longer hold up the reply.
-  assert.equal(run.status,'finished');assert.equal(run.attention,undefined);
-  assert.equal(run.items.filter(i=>i.status==='sent').length,10);
-  assert.equal(sent.length,10);
-  assert.equal(runSummary(run).repostSkipped,4);
-  const rejected=run.items.filter(i=>(i.repostSkipped?.length??0)>0);
+  // Part 2: rejected posts never claim a repost, and they never get a reply either.
+  assert.equal(run.items.filter(i=>i.status==='sent').length,6);
+  assert.equal(sent.length,6);
+  assert.equal(runSummary(run).repostSkipped,0);
+  const rejected=run.items.filter(i=>i.sentId===undefined);
   assert.equal(rejected.length,4);
-  for(const item of rejected){assert.equal(item.reposted.length,0);assert.equal(item.sentId!==undefined,true);assert.equal(creates[item.incoming!.tweetIds[0]],2)}
+  for(const item of rejected){assert.equal(item.reposted.length,0);assert.equal(item.sentId,undefined);assert.equal(creates[item.incoming!.tweetIds[0]],2)}
   globalThis.fetch=originalFetch;
 });
 
-test("a rejected repost delivers the reply once and a later pass never duplicates it",async()=>{
+test("a rejected repost blocks the reply, and a later pass never sends it",async()=>{
   const owner='post-rejection-recovery';await setup(owner);let writes=0,sends=0;
   globalThis.fetch=withRepostReadback(async(url:any)=>{
     const path=String(url);if(path.includes('/conversation/'))return json({conversation_timeline:{entries:[message()],status:'AT_END'}});
@@ -984,12 +981,12 @@ test("a rejected repost delivers the reply once and a later pass never duplicate
     sends++;return json({entries:[{message:{id:'one-reply'}}]});
   });
   let run=await createDmRun(owner,{id:'account',message:'Done'});run=await processDmRun(owner,run.id,16000,1);
-  assert.equal(run.items[0].status,'sent');assert.equal(run.items[0].sentId,'one-reply');assert.equal(sends,1);
-  assert.deepEqual(run.items[0].repostSkipped,['123456789']);
-  // Re-running the same chat must not deliver the DM a second time.
+  assert.equal(run.items[0].status,'retry_wait');assert.equal(run.items[0].sentId,undefined);assert.equal(sends,0);
+  assert.deepEqual(run.items[0].repostSkipped ?? [],[]);
+  // Re-running the same chat must still not deliver the DM.
   await updateDmDoc<any>(owner,`run:${run.id}`,()=>null,r=>({...r,nextAt:0,items:r.items.map((i:any)=>({...i,retryAt:0}))}));
   run=await processDmRun(owner,run.id,16000,1);
-  assert.equal(sends,1);
+  assert.equal(sends,0);assert.equal(run.items[0].sentId,undefined);
   globalThis.fetch=originalFetch;
 });
 

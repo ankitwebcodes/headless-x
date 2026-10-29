@@ -131,7 +131,7 @@ export async function createDmRun(owner: string, body: Record<string, any>): Pro
     const run: DmRun = { id: randomUUID(), accountId, message, dryRun: !!body.dryRun,
       delayMs: boundedInt(body.delayMs,6000,1000,60000), concurrency: boundedInt(body.concurrency,2,1,3),speed: body.speed === 2 ? 2 : 1,
       status: "running",mode,cooldownMinutes: boundedInt(body.cooldownMinutes,120,0,1440),
-      repostRequired: body.repostRequired === true,
+      repostRequired: true, // Part 2: repost is mandatory
       includeReplied: typeof body.includeReplied === "boolean" ? body.includeReplied : mode !== "unseen",createdAt: Date.now(), updatedAt: Date.now(), nextAt: 0,
       items: chats.map(c => ({ id: c.id, name: c.name, handle: c.handle, status: "queued", reposted: [], requestId: randomUUID(), attempts: 0 })) };
     await updateDmDoc(owner,`run:${run.id}`,() => run,() => run);
@@ -250,10 +250,8 @@ export async function processDmRun(owner: string, id: string, budgetMs = 40000, 
     const oldProgress = priorProgress[input.id];
     let item: RunItem = { ...input,reposted: [...input.reposted],attempts: input.attempts + 1,error: undefined,retryAt: undefined,failedStep: undefined,kind: undefined,
       lastSentAt: Math.max(input.lastSentAt ?? 0,scanned.get(input.id)?.lastSentAt ?? 0,oldProgress?.lastSentAt ?? (oldProgress?.replySent ? oldProgress.updatedAt : 0)) || null };
-    // A post X refuses to retweet (deleted, protected, not retweetable) must not block
-    // the reply — the DM is the point of the run. Opt back in with "Require repost".
-    const repostCanBeSkipped = (outcome: DmOutcome) => !run!.repostRequired && item.step === "repost" &&
-      (outcome.unavailable === true || outcome.kind === "post_rejected" || outcome.kind === "permanent");
+    // Part 2: a post X refuses to retweet MUST block the reply. The user's rule is
+    // "not a single post misses": a failed, skipped or uncertain repost never sends a DM.
     const fail = async (outcome: DmOutcome) => {
       if(outcome.deferred){await changeItem({...item,status:"retry_wait",attempts:Math.max(0,item.attempts-1),retryAt:Date.now()+1000,error:outcome.error,failedStep:item.step});return}
       // 226 is a soft automation throttle, not a ban. Back just this chat off with jitter
@@ -267,7 +265,7 @@ export async function processDmRun(owner: string, id: string, budgetMs = 40000, 
           return;
         }
       }
-      if(outcome.unavailable){await changeItem({...item,status:"skipped",error:outcome.error??"Post is unavailable. Repost and reply skipped.",kind:outcome.kind,failedStep:item.step});return}
+      if(outcome.unavailable && item.step !== "repost"){await changeItem({...item,status:"skipped",error:outcome.error??"Post is unavailable. Repost and reply skipped.",kind:outcome.kind,failedStep:item.step});return}
       const retry = (["rate_limit","transient"].includes(outcome.kind ?? "") && item.attempts < 6)
         || (outcome.kind === "post_rejected" && item.attempts < 3);
       const retryAt = outcome.retryAt ?? Date.now() + Math.min(15 * 60000, 5000 * 2 ** item.attempts) + Math.floor(Math.random() * 2000);
@@ -339,20 +337,11 @@ export async function processDmRun(owner: string, id: string, budgetMs = 40000, 
       item.requestId = previous?.requestId ?? item.requestId;
       const record = async (status: Ledger["status"]) => updateDmDoc<Ledger>(owner,key,() => ({ status, reposted: [], requestId: item.requestId, text: item.text! }), old =>
         ({ ...old,status:item.replyAlreadySent?"sent":status,reposted: item.reposted,repostProofs:item.repostProofs,requestId: item.requestId,text: item.text!,sentId: item.sentId??old.sentId,startedAt: item.sendStartedAt??old.startedAt }));
-      // Record that the post could not be reposted, then let the run continue to the reply.
-      const skipRepost = async (tweetId: string, outcome: DmOutcome) => {
-        item.reposted = item.reposted.filter(id => id !== tweetId);
-        item.repostSkipped = [...new Set([...(item.repostSkipped ?? []), tweetId])];
-        item.repostSkipReason = outcome.error ?? "X did not allow a repost for this post.";
-        item.kind = undefined; item.error = undefined; item.retryAt = undefined; item.failedStep = undefined;
-        await record("reposted");
-        await changeItem(item);
-      };
       for (const tweetId of item.incoming.tweetIds) {
         if(item.reposted.includes(tweetId)&&freshRepostProof(item.repostProofs?.[tweetId],tweetId)){
           item.step="repost";
           const read=await verifyRepost(account.sessionJson,tweetId,signal);item.diagnostics=[...(item.diagnostics??[]),...read.diagnostics].slice(-8);
-          if(!read.ok||!read.repostProof){if(repostCanBeSkipped(read)){await skipRepost(tweetId,read);continue}await fail(read);return}
+          if(!read.ok||!read.repostProof){await fail(read);return}
           const priorProof:DmRepostProof=item.repostProofs![tweetId];
           // SUPERBOT-strict resume: if X now points at a DIFFERENT retweet than
           // the one this proof claims, the proof is stale — do not trust the
@@ -376,8 +365,7 @@ export async function processDmRun(owner: string, id: string, budgetMs = 40000, 
         if(repost.repostProof)item.repostProofs={...item.repostProofs,[tweetId]:repost.repostProof};
         if (!repost.ok) {
           if (repost.kind === "uncertain") { await record("uncertain"); await fail(repost); return; }
-          // X rejected the retweet for good (404/deleted/protected). Post the reply anyway.
-          if (repostCanBeSkipped(repost)) { await skipRepost(tweetId,repost); continue; }
+          // Part 2: X rejected the retweet. DM is blocked, item fails/retries, never sent.
           await fail(repost); return;
         }
         if(!freshRepostProof(repost.repostProof,tweetId)){await record("uncertain");await fail({ok:false,kind:"uncertain",error:"A fresh repost mutation was not verified. DM blocked."});return}

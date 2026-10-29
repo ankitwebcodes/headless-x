@@ -90,3 +90,39 @@ node --experimental-strip-types --test tests/dm-automation.test.ts
    wider batch. Old "completed" rows from before this fix will not be
    trusted: their proofs have no matching retweet id, so those posts
    will be re-done on the next run for their chats.
+
+## Part 2 (2026-10-29) — live test: 10 chats, DMs sent without reposts
+
+Live test on @DeepRelent7549: the panel marked 10 chats completed, but
+6 posts were not actually reposted, and the custom DM was still sent
+to those users. Posts reported, 2026-10-29:
+geoffrey395/1937422888317125123, maria01mz4/2115123255413796984,
+VirtualBF_AI/2114016042444026022, VirtualBF_AI/2114719399412376022,
+Ethanspagevip/2115127401424248888, gold_reno/2115233047931171132.
+
+Root cause, found in code, not in Part 1 verification: this was the
+panel's intentional skip behaviour, encoded in its own tests
+("ten chats drain independently: four rejected reposts still deliver
+their replies while six repost and reply"). By default "Require
+repost" was off, so if X rejected a retweet (unavailable, deleted,
+protected, not retweetable, permanent error), the run skipped that
+repost, recorded it as skipped, and still sent the DM, ending in
+"sent". That directly breaks the user's rule: not a single post
+misses, repost first.
+
+What changed in Part 2:
+- lib/dm-policy.ts — repost is now always required (default true,
+  normalisation forces true). No saved setting can re-enable skipping.
+- lib/dm-run.ts — the skip path is removed. A rejected, unavailable
+  or permanent repost failure now fails the item (retry_wait for
+  post_rejected, failed for unavailable) and the DM is blocked.
+  fail() no longer turns a repost-step "unavailable" outcome into
+  "skipped". Run creation always sets repostRequired: true.
+- app/dm/page.tsx — the "Require repost" checkbox is now a fixed,
+  checked, disabled note: "Repost required - the DM is blocked if
+  X won't allow a repost".
+- tests/dm-automation.test.ts — the 4 tests that encoded the old
+  skip-and-send behaviour are rewritten to the new behaviour:
+  rejected repost blocks the reply, unavailable post blocks the
+  reply, ten chats: six sent and four blocked, rejected repost never
+  sends on a later pass. Suite: 70/70 pass.

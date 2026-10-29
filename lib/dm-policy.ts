@@ -3,7 +3,7 @@ import type { DmChat } from "./xdm.ts";
 
 export type DmMode = "all" | "unread" | "inactive";
 export type DmPreferences = { mode: DmMode; scanScope: DmScanScope; cooldownMinutes: number; message: string; delayMs: number; concurrency: number; speed: 1 | 2; repostRequired: boolean };
-export const defaultDmPreferences: DmPreferences = { mode: "all",scanScope: "all",cooldownMinutes: 120,message: "",delayMs: 6000,concurrency: 2,speed: 1,repostRequired: false };
+export const defaultDmPreferences: DmPreferences = { mode: "all",scanScope: "all",cooldownMinutes: 120,message: "",delayMs: 6000,concurrency: 2,speed: 1,repostRequired: true };
 export function normalizeDmPreferences(input: Partial<DmPreferences>): DmPreferences {
   return { mode: ["all","unread","inactive"].includes(input.mode ?? "") ? input.mode! : "all",
     // "unread" walks only the unread window (fast even on 1000+ chat inboxes);
@@ -14,7 +14,7 @@ export function normalizeDmPreferences(input: Partial<DmPreferences>): DmPrefere
     // 2x doubles the chats per wave. It is what trips X's automation heuristic (226),
     // so standard speed is the default and fast is opt-in.
     speed: input.speed === 2 ? 2 : 1,
-    repostRequired: input.repostRequired === true };
+    repostRequired: true } // Part 2: repost is mandatory. A failed/skipped repost must block the DM, never send it.;
 }
 export function isRequestChat(chat: { isRequest?: boolean; status?: string; inactive?: boolean }) {
   return chat.isRequest === true || /REQUEST|UNTRUSTED|LOW_QUALITY/i.test(chat.status ?? "") || chat.isRequest === undefined && chat.inactive === true;
